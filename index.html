@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>神経衰弱</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+  color: #fff;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  text-shadow: 0 0 20px rgba(255,255,255,0.3);
+}
+
+.stats {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 20px;
+  font-size: 1.1rem;
+}
+
+.stats span { opacity: 0.85; }
+.stats strong { color: #ffd700; }
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  max-width: 460px;
+  width: 100%;
+  perspective: 800px;
+}
+
+.card {
+  aspect-ratio: 1;
+  cursor: pointer;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.5s;
+}
+
+.card.flipped { transform: rotateY(180deg); }
+.card.matched { pointer-events: none; }
+.card.matched .front { box-shadow: 0 0 20px rgba(255, 215, 0, 0.6); }
+
+.card .front, .card .back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card .back {
+  background: linear-gradient(145deg, #4a4e8a, #2d3166);
+  border: 2px solid rgba(255,255,255,0.15);
+  font-size: 2rem;
+}
+
+.card .back::after {
+  content: '?';
+  font-weight: bold;
+  opacity: 0.5;
+}
+
+.card .front {
+  background: linear-gradient(145deg, #1a1a3e, #2a2a5e);
+  border: 2px solid rgba(255,215,0,0.3);
+  transform: rotateY(180deg);
+  font-size: 3.5rem;
+}
+
+button {
+  margin-top: 24px;
+  padding: 12px 36px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 30px;
+  background: linear-gradient(145deg, #ffd700, #f0a500);
+  color: #1a1a3e;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(255,215,0,0.4);
+}
+
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.overlay.show { display: flex; }
+
+.overlay-content {
+  text-align: center;
+  background: linear-gradient(145deg, #1e1e4a, #2a2a6a);
+  padding: 40px 50px;
+  border-radius: 20px;
+  border: 2px solid rgba(255,215,0,0.3);
+}
+
+.overlay-content h2 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #ffd700;
+}
+
+.overlay-content p {
+  font-size: 1.1rem;
+  margin-bottom: 20px;
+  opacity: 0.9;
+}
+
+@media (max-width: 500px) {
+  .board { gap: 8px; max-width: 340px; }
+  .card .front { font-size: 2.5rem; }
+  h1 { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<h1>神経衰弱</h1>
+<div class="stats">
+  <span>手数: <strong id="moves">0</strong></span>
+  <span>ペア: <strong id="pairs">0</strong> / 8</span>
+  <span>時間: <strong id="timer">0</strong>秒</span>
+</div>
+<div class="board" id="board"></div>
+<button onclick="initGame()">リスタート</button>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-content">
+    <h2>クリア!</h2>
+    <p id="result"></p>
+    <button onclick="initGame()">もう一度遊ぶ</button>
+  </div>
+</div>
+
+<script>
+const EMOJIS = ['🐶','🐱','🐼','🦊','🐸','🦋','🐙','🍄'];
+let cards, flipped, matched, moves, timerInterval, startTime, locked;
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function initGame() {
+  clearInterval(timerInterval);
+  document.getElementById('overlay').classList.remove('show');
+  flipped = [];
+  matched = 0;
+  moves = 0;
+  locked = false;
+  startTime = null;
+  timerInterval = null;
+  document.getElementById('moves').textContent = '0';
+  document.getElementById('pairs').textContent = '0';
+  document.getElementById('timer').textContent = '0';
+
+  cards = shuffle([...EMOJIS, ...EMOJIS]);
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  cards.forEach((emoji, i) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="front">${emoji}</div><div class="back"></div>`;
+    card.addEventListener('click', () => flipCard(card, i));
+    board.appendChild(card);
+  });
+}
+
+function flipCard(card, index) {
+  if (locked || card.classList.contains('flipped') || card.classList.contains('matched')) return;
+  if (flipped.length >= 2) return;
+
+  if (!startTime) {
+    startTime = Date.now();
+    timerInterval = setInterval(() => {
+      document.getElementById('timer').textContent = Math.floor((Date.now() - startTime) / 1000);
+    }, 200);
+  }
+
+  card.classList.add('flipped');
+  flipped.push({ card, index });
+
+  if (flipped.length === 2) {
+    moves++;
+    document.getElementById('moves').textContent = moves;
+    const [a, b] = flipped;
+
+    if (cards[a.index] === cards[b.index]) {
+      a.card.classList.add('matched');
+      b.card.classList.add('matched');
+      matched++;
+      document.getElementById('pairs').textContent = matched;
+      flipped = [];
+
+      if (matched === EMOJIS.length) {
+        clearInterval(timerInterval);
+        const time = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('result').textContent = `${moves}手、${time}秒でクリア!`;
+        setTimeout(() => document.getElementById('overlay').classList.add('show'), 600);
+      }
+    } else {
+      locked = true;
+      setTimeout(() => {
+        a.card.classList.remove('flipped');
+        b.card.classList.remove('flipped');
+        flipped = [];
+        locked = false;
+      }, 800);
+    }
+  }
+}
+
+initGame();
+</script>
+</body>
+</html>
